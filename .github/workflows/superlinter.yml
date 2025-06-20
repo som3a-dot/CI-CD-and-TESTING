@@ -1,0 +1,26 @@
+name: Build Qt App
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Qt (using apt)
+        run: |
+          sudo apt update
+          sudo apt install -y qt5-qmake qtbase5-dev g++ make
+
+      - name: Build with qmake
+        run: |
+          qmake zoma.pro
+          make
+
