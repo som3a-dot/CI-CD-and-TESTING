@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Build and TestAdd commentMore actions
 
 on:
   push:
@@ -8,37 +8,27 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: '6.5.0' # Adjust to your Qt version
-        modules: 'qtcharts' # Add modules if needed
+    - name: Install tools
+      run: sudo apt update && sudo apt install -y cmake g++ qtbase5-dev libgtest-dev
 
-    - name: Setup environment
+    - name: Prepare Google Test
       run: |
-        echo "QTDIR=$HOME/Qt/6.5.0/$(uname -s)-$(uname -m)/lib/cmake" >> $GITHUB_ENV
-        echo "PATH=$HOME/Qt/6.5.0/$(uname -s)-$(uname -m)/bin:$PATH" >> $GITHUB_ENV
+        cd /usr/src/gtest
+        sudo cmake .
+        sudo make
+        sudo cp lib/*.a /usr/lib
 
-    - name: Configure and build
-      run: |
-        qmake
-        make
+    - name: Configure project
+      run: mkdir build && cd build && cmake ..
+
+    - name: Build project
+      run: cd build && make
 
     - name: Run tests
-      run: |
-        ./TicTacToe # Adjust executable name based on your TARGET
-
-    - name: Deploy (optional)
-      if: github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest'
-      run: |
-        echo "Deploying to production..."
-        # Add deployment steps (e.g., copy to server, create package)
+      run: cd build && ctest --verbose
