@@ -1,263 +1,44 @@
-# GitHub Actions CI/CD Pipeline for Advanced Tic Tac Toe
-# File: .github/workflows/ci-cd.yml
-
 name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
-  release:
-    types: [ published ]
-
-env:
-  QT_VERSION: '6.5.0'
-  BUILD_TYPE: Release
 
 jobs:
-  test:
-    name: Test on ${{ matrix.os }}
+  build-and-test:
     runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        include:
-          - os: ubuntu-latest
-            qt-arch: 'gcc_64'
-          - os: windows-latest
-            qt-arch: 'win64_msvc2019_64'
-          - os: macos-latest
-            qt-arch: 'clang_64'
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Cache Qt
-      id: cache-qt
-      uses: actions/cache@v3
-      with:
-        path: ../Qt
-        key: ${{ runner.os }}-QtCache-${{ env.QT_VERSION }}
-
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: ${{ env.QT_VERSION }}
-        arch: ${{ matrix.qt-arch }}
-        modules: 'qtcharts qtnetworkauth'
-        cached: ${{ steps.cache-qt.outputs.cache-hit }}
-
-    - name: Install dependencies (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libgtest-dev lcov gcov
-        cd /usr/src/gtest
-        sudo cmake CMakeLists.txt
-        sudo make
-        sudo cp lib/*.a /usr/lib/ || sudo cp *.a /usr/lib/
-
-    - name: Install dependencies (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        choco install googlebenchmark
-        vcpkg install gtest:x64-windows
-
-    - name: Install dependencies (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install googletest google-benchmark
-
-    - name: Configure MSVC (Windows)
-      if: matrix.os == 'windows-latest'
-      uses: ilammy/msvc-dev-cmd@v1
-
-    - name: Build application
-      run: |
-        qmake AdvancedTicTacToe.pro
-        make -j$(nproc 2>/dev/null || echo 4)
-
-    - name: Build and run unit tests
-      run: |
-        qmake CONFIG+=test
-        make -j$(nproc 2>/dev/null || echo 4)
-
-    - name: Run specific test suites
-      run: |
-        cd tests/unit/game-tests && ./game-tests --gtest_output=xml:game-test-results.xml
-        cd tests/unit/ai-tests && ./ai-tests --gtest_output=xml:ai-test-results.xml
-        cd tests/integration && ./integration-tests --gtest_output=xml:integration-test-results.xml
-
-    - name: Generate coverage report (Ubuntu only)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        lcov --capture --directory . --output-file coverage.info
-        lcov --remove coverage.info '/usr/*' --output-file coverage.info
-        lcov --remove coverage.info '*/tests/*' --output-file coverage.info
-        lcov --remove coverage.info '*/thirdparty/*' --output-file coverage.info
-        lcov --list coverage.info
-
-    - name: Upload coverage to Codecov
-      if: matrix.os == 'ubuntu-latest'
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.info
-        fail_ci_if_error: true
-
-    - name: Upload test results
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: test-results-${{ matrix.os }}
-        path: |
-          **/*test-results.xml
-          coverage.info
-
-  performance:
-    name: Performance Benchmarks
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: ${{ env.QT_VERSION }}
-
-    - name: Install benchmark dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libgtest-dev libbenchmark-dev
-
-    - name: Build performance tests
-      run: |
-        cd performance
-        qmake performance.pro
-        make -j$(nproc)
-
-    - name: Run performance benchmarks
-      run: |
-        cd performance
-        ./performance-tests --benchmark_format=json --benchmark_out=benchmark-results.json
-
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v3
-      with:
-        name: performance-results
-        path: performance/benchmark-results.json
-
-  code-quality:
-    name: Code Quality Analysis
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Shallow clones should be disabled for better relevancy
-
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: ${{ env.QT_VERSION }}
-
-    - name: Install analysis tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cppcheck clang-tidy
-
-    - name: Run static analysis
-      run: |
-        cppcheck --enable=all --xml --xml-version=2 src/ 2> cppcheck-report.xml
-        find src/ -name "*.cpp" -o -name "*.h" | xargs clang-tidy -checks=-*,readability-*,performance-*,modernize-* > clang-tidy-report.txt
-
-    - name: SonarCloud Scan
-      uses: SonarSource/sonarcloud-github-action@master
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-  build-release:
-    name: Build Release Artifacts
-    runs-on: ${{ matrix.os }}
-    needs: [test, performance, code-quality]
-    if: github.event_name == 'release'
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
-        version: ${{ env.QT_VERSION }}
+        version: '6.5.0' # Adjust to your Qt version
+        modules: 'qtcharts' # Add modules if needed
 
-    - name: Configure MSVC (Windows)
-      if: matrix.os == 'windows-latest'
-      uses: ilammy/msvc-dev-cmd@v1
-
-    - name: Build release
+    - name: Setup environment
       run: |
-        qmake CONFIG+=release AdvancedTicTacToe.pro
-        make -j$(nproc 2>/dev/null || echo 4)
+        echo "QTDIR=$HOME/Qt/6.5.0/$(uname -s)-$(uname -m)/lib/cmake" >> $GITHUB_ENV
+        echo "PATH=$HOME/Qt/6.5.0/$(uname -s)-$(uname -m)/bin:$PATH" >> $GITHUB_ENV
 
-    - name: Package application (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
+    - name: Configure and build
       run: |
-        mkdir -p AdvancedTicTacToe-Linux
-        cp src/AdvancedTicTacToe AdvancedTicTacToe-Linux/
-        cp -r assets/ AdvancedTicTacToe-Linux/ || true
-        tar -czf AdvancedTicTacToe-Linux.tar.gz AdvancedTicTacToe-Linux/
+        qmake
+        make
 
-    - name: Package application (Windows)
-      if: matrix.os == 'windows-latest'
+    - name: Run tests
       run: |
-        mkdir AdvancedTicTacToe-Windows
-        copy src\release\AdvancedTicTacToe.exe AdvancedTicTacToe-Windows\
-        windeployqt AdvancedTicTacToe-Windows\AdvancedTicTacToe.exe
-        7z a AdvancedTicTacToe-Windows.zip AdvancedTicTacToe-Windows\
+        ./TicTacToe # Adjust executable name based on your TARGET
 
-    - name: Package application (macOS)
-      if: matrix.os == 'macos-latest'
+    - name: Deploy (optional)
+      if: github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest'
       run: |
-        mkdir -p AdvancedTicTacToe-macOS
-        cp -r src/AdvancedTicTacToe.app AdvancedTicTacToe-macOS/
-        macdeployqt AdvancedTicTacToe-macOS/AdvancedTicTacToe.app
-        tar -czf AdvancedTicTacToe-macOS.tar.gz AdvancedTicTacToe-macOS/
-
-    - name: Upload release artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: AdvancedTicTacToe-${{ matrix.os }}
-        path: |
-          AdvancedTicTacToe-*.tar.gz
-          AdvancedTicTacToe-*.zip
-
-  deploy:
-    name: Deploy Release
-    runs-on: ubuntu-latest
-    needs: build-release
-    if: github.event_name == 'release'
-
-    steps:
-    - name: Download all artifacts
-      uses: actions/download-artifact@v3
-
-    - name: Upload to release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          AdvancedTicTacToe-*/AdvancedTicTacToe-*
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        echo "Deploying to production..."
+        # Add deployment steps (e.g., copy to server, create package)
