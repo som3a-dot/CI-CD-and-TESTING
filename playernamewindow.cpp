@@ -43,3 +43,7 @@ void PlayerNameWindow::on_okButton_2_clicked()
     }
 }
 
+void PlayerNameWindow::on_okButton_clicked()
+{
+    return;
+}
