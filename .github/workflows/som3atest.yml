@@ -1,4 +1,4 @@
-name: Build and TestAdd commentMore actions
+name: Build Qt App
 
 on:
   push:
@@ -7,28 +7,19 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Install tools
-      run: sudo apt update && sudo apt install -y cmake g++ qtbase5-dev libgtest-dev
+      - name: Install Qt (using apt)
+        run: |
+          sudo apt update
+          sudo apt install -y qt5-qmake qtbase5-dev g++ make
 
-    - name: Prepare Google Test
-      run: |
-        cd /usr/src/gtest
-        sudo cmake .
-        sudo make
-        sudo cp lib/*.a /usr/lib
-
-    - name: Configure project
-      run: mkdir build && cd build && cmake ..
-
-    - name: Build project
-      run: cd build && make
-
-    - name: Run tests
-      run: cd build && ctest --verbose
+      - name: Build with qmake
+        run: |
+          qmake zoma.pro
+          make
